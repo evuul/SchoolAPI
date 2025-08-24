@@ -10,5 +10,10 @@ public interface IStudentRepository
     Task UpdateAsync(Models.Student student, CancellationToken ct = default);
     Task DeleteAsync(Models.Student student, CancellationToken ct = default);
     Task<bool> StudentExistsAsync(int studentId, CancellationToken ct = default);
+
+    // 🔹 Nya för affärsreglerna
+    Task<bool> EmailExistsAsync(string email, int? exceptId, CancellationToken ct = default);
+    Task<bool> HasActiveEnrollmentsAsync(int studentId, CancellationToken ct = default);
+
     Task<bool> SaveChangesAsync(CancellationToken ct = default);
 }

@@ -169,3 +169,4 @@
 /Users/alexanderek/RiderProjects/SchoolAPI/SchoolAPI/bin/Debug/net8.0/AutoMapper.dll
 /Users/alexanderek/RiderProjects/SchoolAPI/SchoolAPI/bin/Debug/net8.0/FluentValidation.dll
 /Users/alexanderek/RiderProjects/SchoolAPI/SchoolAPI/bin/Debug/net8.0/FluentValidation.DependencyInjectionExtensions.dll
+/Users/alexanderek/RiderProjects/SchoolAPI/SchoolAPI/obj/Debug/net8.0/SchoolAPI.sourcelink.json

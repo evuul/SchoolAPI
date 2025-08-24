@@ -74,8 +74,8 @@ namespace SchoolAPI.Migrations
                     b.Property<int>("CourseId")
                         .HasColumnType("int");
 
-                    b.Property<DateOnly?>("EnrolledAt")
-                        .HasColumnType("date");
+                    b.Property<DateTime>("EnrollmentDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Grade")
                         .HasColumnType("nvarchar(max)");

@@ -6,8 +6,7 @@ namespace SchoolAPI.Repositories.Student;
 public class StudentRepository : IStudentRepository
 {
     private readonly SchoolContext _context;
-    // constructor that accepts a SchoolContext instance
-    // and throws an ArgumentNullException if the context is null.
+
     public StudentRepository(SchoolContext context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -24,6 +23,7 @@ public class StudentRepository : IStudentRepository
 
     public async Task<Models.Student?> GetByIdAsync(int id, CancellationToken ct = default)
     {
+        // Behåll tracking här så Update/Delete kan använda entiteten
         return await _context.Students.FirstOrDefaultAsync(s => s.Id == id, ct);
     }
 
@@ -40,7 +40,7 @@ public class StudentRepository : IStudentRepository
     
     public async Task<bool> StudentExistsAsync(int studentId, CancellationToken ct = default)
     {
-        return await _context.Students.AnyAsync(s => s.Id == studentId, ct);
+        return await _context.Students.AsNoTracking().AnyAsync(s => s.Id == studentId, ct);
     }
 
     public Task DeleteAsync(Models.Student student, CancellationToken ct = default)
@@ -49,8 +49,25 @@ public class StudentRepository : IStudentRepository
         return Task.CompletedTask;
     }
 
-    public Task<bool> SaveChangesAsync(CancellationToken ct = default)
+    // 🔹 Nya för affärsreglerna
+    public async Task<bool> EmailExistsAsync(string email, int? exceptId, CancellationToken ct = default)
     {
-        return _context.SaveChangesAsync(ct).ContinueWith(t => t.Result > 0, ct);
+        var q = _context.Students.AsNoTracking().Where(s => s.Email == email);
+        if (exceptId.HasValue) q = q.Where(s => s.Id != exceptId.Value);
+        return await q.AnyAsync(ct);
+    }
+
+    public async Task<bool> HasActiveEnrollmentsAsync(int studentId, CancellationToken ct = default)
+    {
+        // Justera villkoret om ni har ett "IsActive"-fält; annars räcker StudentId
+        return await _context.Enrollments
+            .AsNoTracking()
+            .AnyAsync(e => e.StudentId == studentId, ct);
+    }
+
+    public async Task<bool> SaveChangesAsync(CancellationToken ct = default)
+    {
+        var changed = await _context.SaveChangesAsync(ct);
+        return changed > 0;
     }
 }

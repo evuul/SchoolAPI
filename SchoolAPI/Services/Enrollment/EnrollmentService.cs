@@ -15,33 +15,52 @@ public class EnrollmentService : IEnrollmentService
         _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
     }
 
-    public async Task<int> CreateAsync(EnrollmentCreateDto dto, CancellationToken ct = default)
+    // CREATE — förhindra dubbla enrollments (StudentId, CourseId)
+    public async Task<ServiceResult<int>> CreateAsync(EnrollmentCreateDto dto, CancellationToken ct = default)
     {
-        var enrollmentToCreate = _mapper.Map<Models.Enrollment>(dto);
-        await _repository.AddAsync(enrollmentToCreate, ct);
+        if (dto.StudentId <= 0)
+            return ServiceResult<int>.Fail(Err.Validation(nameof(dto.StudentId), "Ogiltigt student-id."));
+        if (dto.CourseId <= 0)
+            return ServiceResult<int>.Fail(Err.Validation(nameof(dto.CourseId), "Ogiltigt kurs-id."));
+
+        // Dubbelregistrering?
+        if (await _repository.EnrollmentExistsAsync(dto.StudentId, dto.CourseId, ct))
+            return ServiceResult<int>.Fail(
+                Err.Validation(field: null, message: "Studenten är redan inskriven på kursen.", code: "enrollment.duplicate")
+            );
+
+        var entity = _mapper.Map<Models.Enrollment>(dto);
+        await _repository.AddAsync(entity, ct);
         await _repository.SaveChangesAsync(ct);
-        return enrollmentToCreate.Id;
+        return ServiceResult<int>.Ok(entity.Id);
     }
 
+    // READ ALL
     public async Task<List<EnrollmentReadDto>> GetAllAsync(CancellationToken ct = default)
     {
         var enrollments = await _repository.GetAllAsync(ct);
         return _mapper.Map<List<EnrollmentReadDto>>(enrollments);
     }
 
-    public async Task<EnrollmentReadDto?> GetByIdAsync(int id, CancellationToken ct = default)
+    // READ BY ID (valfritt: gör den också ServiceResult för 404-hantering)
+    public async Task<ServiceResult<EnrollmentReadDto>> GetByIdAsync(int id, CancellationToken ct = default)
     {
         var enrollment = await _repository.GetByIdAsync(id, ct);
-        return enrollment == null ? null : _mapper.Map<EnrollmentReadDto>(enrollment);
+        if (enrollment is null)
+            return ServiceResult<EnrollmentReadDto>.Fail(Err.NotFound("enrollment.not_found", "Inskrivningen finns inte."));
+        return ServiceResult<EnrollmentReadDto>.Ok(_mapper.Map<EnrollmentReadDto>(enrollment));
     }
 
-    public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
+    // DELETE (kan lämnas som är, men bättre med ServiceResult för enhetlig felhantering)
+    public async Task<ServiceResult<Unit>> DeleteAsync(int id, CancellationToken ct = default)
     {
-        var enrollmentToDelete = await _repository.GetByIdAsync(id, ct);
-        if (enrollmentToDelete == null)
-            return false;
+        var enrollment = await _repository.GetByIdAsync(id, ct);
+        if (enrollment is null)
+            return ServiceResult<Unit>.Fail(Err.NotFound("enrollment.not_found", "Inskrivningen finns inte."));
 
-        await _repository.DeleteAsync(enrollmentToDelete, ct);
-        return await _repository.SaveChangesAsync(ct);
+        await _repository.DeleteAsync(enrollment, ct);
+        var ok = await _repository.SaveChangesAsync(ct);
+        return ok ? ServiceResult.Ok()
+                  : ServiceResult<Unit>.Fail(Err.Unexpected("Kunde inte ta bort inskrivningen."));
     }
 }

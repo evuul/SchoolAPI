@@ -7,62 +7,77 @@ namespace SchoolAPI.Controllers.Courses;
 
 [ApiController]
 [Route("api/[controller]")]
-public class CoursesConroller : ControllerBase
+public class CoursesController : ControllerBase
 {
     private readonly ICourseService _service;
 
-    public CoursesConroller(ICourseService service)
+    public CoursesController(ICourseService service)
     {
         _service = service;
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Models.DTOs.Course.CourseReadDto>>> GetAll(
-        CancellationToken ct = default)
+    public async Task<ActionResult<IEnumerable<CourseReadDto>>> GetAll(CancellationToken ct = default)
     {
         var courses = await _service.GetAllAsync(ct);
         return Ok(courses);
     }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<Models.DTOs.Course.CourseReadDto>> GetById(int id,
-        CancellationToken ct = default)
+    public async Task<IActionResult> GetById(int id, CancellationToken ct = default)
     {
         var result = await _service.GetByIdAsync(id, ct);
-        return result is null ? NotFound() : Ok(result);
+        return this.ToActionResult(result); // använder ResultToHttp.ToActionResult
     }
 
     [HttpPost]
-    public async Task<ActionResult<Models.DTOs.Course.CourseCreateDto>> Create(
-        [FromBody] Models.DTOs.Course.CourseCreateDto dto, CancellationToken ct,
-        IValidator<Models.DTOs.Course.CourseCreateDto> validator)
+    public async Task<IActionResult> Create(
+        [FromBody] CourseCreateDto dto,
+        CancellationToken ct,
+        IValidator<CourseCreateDto> validator)
     {
-        var result = validator.Validate(dto);
-        if (!result.IsValid)
+        // (Fältspecifik) FluentValidation – valfritt att behålla
+        var fv = validator.Validate(dto);
+        if (!fv.IsValid)
+            return BadRequest(new { errors = fv.Errors.Select(e => e.ErrorMessage) });
+
+        var createResult = await _service.CreateAsync(dto, ct);
+        if (createResult.IsSuccess)
         {
-            return BadRequest(result.Errors.Select(x => x.ErrorMessage));
+            // Hämta den skapade för payload/Location
+            var getResult = await _service.GetByIdAsync(createResult.Value!, ct);
+            if (getResult.IsSuccess)
+                return CreatedAtAction(nameof(GetById), new { id = createResult.Value }, getResult.Value);
+            // Skapad men kunde inte läsa – fall tillbaka till 201 utan body
+            return StatusCode(201, new { id = createResult.Value });
         }
 
-        var id = await _service.CreateAsync(dto, ct);
-        var created = await _service.GetByIdAsync(id, ct);
-        return CreatedAtAction(nameof(GetById), new { id }, created);
+        // Kredits < 0 etc → 400 via helpern
+        return this.ToActionResult(createResult); // default 200 → vi vill 4xx/5xx för fel
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] CourseUpdateDto dto, CancellationToken ct, IValidator<CourseUpdateDto> validator )
+    public async Task<IActionResult> Update(
+        int id,
+        [FromBody] CourseUpdateDto dto,
+        CancellationToken ct,
+        IValidator<CourseUpdateDto> validator)
     {
-        var result = validator.Validate(dto);
-        if (!result.IsValid)
-            return BadRequest(result.Errors.Select(x => x.ErrorMessage));
+        // (Fältspecifik) FluentValidation – valfritt
+        var fv = validator.Validate(dto);
+        if (!fv.IsValid)
+            return BadRequest(new { errors = fv.Errors.Select(e => e.ErrorMessage) });
 
-        var isUpdated = await _service.UpdateAsync(id, dto, ct);
-        return isUpdated ? NoContent() : NotFound();
+        var result = await _service.UpdateAsync(id, dto, ct);
+        // Vid success: 204 No Content
+        return this.ToActionResult(result, successStatus: 204);
     }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var isDeleted = await _service.DeleteAsync(id, ct);
-        return isDeleted ? NoContent() : NotFound();
+        var result = await _service.DeleteAsync(id, ct);
+        // Vid success: 204 No Content
+        return this.ToActionResult(result, successStatus: 204);
     }
 }
